@@ -16,3 +16,10 @@ https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
 
 
 The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Deliverables
+- The report of the assignment is available at  
+[https://enrico200165.github.io/JHU-DS-PML_W4-Prj/]  
+- The .Rmd files is available at  
+[https://github.com/enrico200165/JHU-DS-PML_W4-Prj/blob/gh-pages/index.Rmd]
+
