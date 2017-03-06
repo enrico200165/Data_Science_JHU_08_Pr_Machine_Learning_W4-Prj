@@ -41,6 +41,23 @@ cbind(names(df1)[idx],names(df2)[idx])
 
 # How You built the model  
 After trying various models used <b>random forest</b> because provided best accuracy: <b>0.9968</b>.  
+In our corse the description of the algorythm was  
+- Bootstrap samples  
+- At each split, bootstrap variables  
+- Grow multiple trees and vote  
+It main positive feature is the accuracy, the main Cons are:  
+- Speed  
+- Interpretability  
+- Overfitting  
+A simple description of the algoryh is the following:  
+Of the entire set of data a subset is taken (training set).  
+The algorithm clusters the data in groups and subgroups to form a tree.  
+At each split or node in this cluster/tree/dendrogram variables are chosen at random by the program to judge whether datapoints have a close relationship or not.  
+The program makes multiple trees a.k.a. a forest. Each tree is different because <b>for each split in a tree, variables are chosen at random</b>.
+Then the rest of the dataset (not the training set) is used to predict which tree in the forests makes the best classification of the datapoints (in the dataset the right classification is known).
+The tree with the most predictive power is shown as output by the algorithm.
+Using the algorithm.
+
 The "rf" implementation would take hours and/or crash on my HW.  
 Following  advice from http://stats.stackexchange.com/ used <b>"Rborist"</b> implementation, with settings also from http://stats.stackexchange.com/,
 and got good performance and no crashes.    
@@ -48,12 +65,13 @@ To avoid repeating lengthy model calculations I serialize and re-read models fro
 
 # How you used cross validation
 I initially simply divided the original training in training (60%) and test (40%).  
-I chose random forest for which cross validation is not as important as it is for other techniques, so did not perform cross validation with K > 2:  
+I chose random forest that performs "implicitly" a cross validation, so did not need to manually create K partitions with with K > 2 Etc.:  
 <i>"By default random forest picks up 2/3rd data for training and rest for testing for regression and almost 70% data for training and rest for testing during classification.  
 By principle since it randomizes the variable selection during each tree split it's not prone to overfit unlike other models.</i>   [http://datascience.stackexchange.com/questions/6510/does-modeling-with-random-forests-requre-cross-validation]"
 
 # What you think the expected out of sample error is
-<b>0.32%</b>, estimate provided directly from the model. See appendix.
+<b>0.32%</b>, estimate provided directly from the confusion matrix.  
+See code in the appendix.
 
 # Why you made the choices you did
 ## Model  
