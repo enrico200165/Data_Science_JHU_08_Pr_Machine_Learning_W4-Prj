@@ -1,0 +1,210 @@
+---
+title: "Pract.ML W4 Project"
+author: "Enrico V."
+date: "06 marzo 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+
+setwd("V:/data/learn/02_JHU_DSci/08_practical-machine-learning/04_week-4-regularized-regression-and-combining-predictors/project/work")
+library(caret)
+library(randomForest)
+library(ggthemes)
+library(gridExtra)
+library(ggplot2)
+library(grid)
+
+# --- some library may use parallel proc if available
+require(foreach)
+require(doParallel)
+cl <- makeCluster(4,outfile="")
+registerDoParallel(cl)
+
+set.seed(2001)
+
+
+checkNames <- function(df1,df2) {
+  all(names(df1) == names(df2))
+sum(names(df1) != names(df2))
+different <- names(df1) != names(df2)
+idx <- which(different)
+print(paste("indexes of different cols:",idx))
+print(paste("names of different columns:"
+  ,names(df1)[idx],",",names(df2)[idx]))
+cbind(names(df1)[idx],names(df2)[idx])
+}
+
+
+```
+<i>The main document is very concise, contains punctual answers. The appendix contains code and explanation, and tries to be very clear.</i>
+
+# How You built the model  
+After trying various models used <b>random forest</b> because provided best accuracy: <b>0.9968</b>.  
+The "rf" implementation would take hours and/or crash on my HW.  
+Following  advice from http://stats.stackexchange.com/ used <b>"Rborist"</b> implementation, with settings also from http://stats.stackexchange.com/,
+and got good performance and no crashes.    
+To avoid repeating lengthy model calculations I serialize and re-read models from disk.
+
+# How you used cross validation
+I initially simply divided the original training in training (60%) and test (40%).  
+I chose random forest for which cross validation is not as important as it is for other techniques, so did not perform cross validation with K > 2:  
+<i>"By default random forest picks up 2/3rd data for training and rest for testing for regression and almost 70% data for training and rest for testing during classification.  
+By principle since it randomizes the variable selection during each tree split it's not prone to overfit unlike other models.</i>   [http://datascience.stackexchange.com/questions/6510/does-modeling-with-random-forests-requre-cross-validation]"
+
+# What you think the expected out of sample error is
+<b>0.32%</b>, estimate provided directly from the model. See appendix.
+
+# Why you made the choices you did
+## Model  
+Random forest had by far the best acuracy and does not strictly require cross validation. So having achieved 99+% accuracy I chose it and stopped the experimentation with all models taught in the course.
+"Rborist"implementation is reasonably fast, very fast relative to "rf".  
+
+## Predictors  
+Removed variables, from 160 to 50+. Removed variables that:  
+- were "semantically" not useful as predictors (the first 5), maybe might have removed more  
+- were NZV (near zero variance)  
+- had more than 10% of NAs
+see code in the appendix
+
+Analysis of correlations, that would have been simple, was not necessary due to random forest working very well without it.
+
+# Appendix
+## Data Loading and Exploratory Analysis
+Reading data is very slow. 
+The technique to speed up reading taught in another course of this specialization, reading a limited number of lines to infer the classes, and pass "classes = " to the "full" read, fails. The problems causing the failure are several, so I gave up on it.
+I avoid unnecessary reads checking if the data frames exist.
+```{r readData}
+fname <- "pml-training.csv"
+if (!exists(deparse(substitute(pmltraining_org))) || nrow(pmltraining_org) <= 0) {
+  pmltraining_org <- read.csv(fname, header = T)
+}
+if (!exists(deparse(substitute(pmltesting_org))) || nrow(pmltesting_org) <= 0) {
+  pmltesting_org = read.csv("pml-testing.csv",header=TRUE)
+}
+dim(pmltraining_org)
+dim(pmltesting_org)
+
+```
+The last (160th) columns have different names and contents.
+```{r exploratory_1}
+sum(names(pmltraining_org) != names(pmltesting_org))
+different <- names(pmltraining_org) != names(pmltesting_org)
+idx <- which(different)
+paste("indexes of different cols:",idx)
+paste("names of different columns:"
+  ,names(pmltraining_org)[idx],", ",names(pmltesting_org)[idx],sep="")
+
+```
+Remove variables that seem semantically not useful for prediction,
+```{r exploratory_semantic}
+non_useful_vars <- c("X", "user_name","raw_timestamp_part_1"
+                     ,"raw_timestamp_part_2", "cvtd_timestamp")
+keepVars <- !(names(pmltraining_org) %in% non_useful_vars)
+pmltraining <- pmltraining_org[ , keepVars]
+pmltesting <- pmltesting_org[ , keepVars]
+```
+find and remove near zero variance columns
+```{r remove_nzv_cols}
+if (!exists(deparse(substitute(nzvcols_train))) || length(nzvcols_train) <= 0) {
+  nzvcols_train <- nearZeroVar(pmltraining)
+}
+if (!exists(deparse(substitute(nzvcols_test))) || length(nzvcols_test) <= 0) {
+  nzvcols_test <- nearZeroVar(pmltesting)
+}
+nzv_all <- unique(sort(c(nzvcols_train, nzvcols_test)))
+pmltraining <- pmltraining[ , -nzv_all]
+pmltesting <-  pmltesting [ , -nzv_all]
+```
+Remove columns with NAs > 0.1
+```{r remove_nas_cols}
+NAsTreshold <-  0.1
+NAPcntTrain <- sapply(pmltraining, function(x) { sum(is.na(x))/length(x) > NAsTreshold;})
+NAPcntTest <-  sapply(pmltesting, function(x) { sum(is.na(x))/length(x) > NAsTreshold;})
+NAPcntAll <- NAPcntTrain | NAPcntTrain
+pmltraining <- pmltraining[ , !NAPcntAll]
+pmltesting  <- pmltesting[  , !NAPcntAll]
+
+# any(names(pmltraining[ ,-c(ncol(pmltraining))]) != names(pmltesting[,-c(ncol(pmltesting))]))
+respCol <- ncol(pmltraining)
+
+```
+
+producing train and test sets from original training set (not 100% original, reduced in vars, see above)
+```{r partition_data}
+trainIdx <- createDataPartition(y=pmltraining$classe, p=0.6, list=FALSE)
+df_train <- pmltraining[trainIdx, ]
+df_test <- pmltraining[-trainIdx, ]
+```
+
+## Deciding prediction models
+Exploring the model types following order of lessons  
+
+### Linear model  
+No expectations on accuracy, considered just for completeness. 
+The "response"" is a factor. Linear models would require converting it to a numeric (ex. position index of factor), and the number of variables is high (50+), so I decide not to use linear models.  
+
+### Trees  
+Accuracy of tree is too low, see below
+```{r modelrpart}
+if (!exists(deparse(substitute(fit_rpart)))) {
+  fit_fname <- "fit_rpart.rds"
+  if(file.exists(fit_fname)){
+    print(paste("reading model from file",fit_fname))
+    fit_rpart <- readRDS(fit_fname)
+  } else {
+    fit_rpart <- train(classe ~ . ,data=df_train, method = "rpart")
+    saveRDS(fit_rpart, fit_fname)
+    # print(fit_rpart)
+  }
+}
+pred_rpart <- predict(fit_rpart,df_test)
+conf_rpart <- confusionMatrix(pred_rpart,df_test$classe)
+print(paste("Tree, accuracy",round(conf_rpart$overall[1],4)))
+```
+
+### Bagging  
+provides good accuracy but is very slow and takes a huge amount of RAM memory. Serialized on disk occupies 184MB versus 3.2 of random forest.
+```{r model_bag}
+if (!exists(deparse(substitute(fit_bag)))) {
+  fit_fname <- "fit_bag.rds"
+  if(file.exists(fit_fname)){
+    print(paste("reading model from file",fit_fname))
+    fit_bag <- readRDS(fit_fname)
+  } else {
+    fit_bag <- bag(df_train[,-c(respCol)]
+     ,df_train$classe, B = 10
+     ,bagControl = bagControl(fit = ctreeBag$fit
+     ,predict = ctreeBag$pred
+     ,aggregate = ctreeBag$aggregate))
+    saveRDS(fit_bag, fit_fname)
+  }
+}
+
+pred_bag <- predict(fit_bag,df_test)
+conf_bag <- confusionMatrix(pred_bag,df_test$classe)
+print(paste("Bagging, accuracy",round(conf_bag$overall[1],4)))
+
+```
+
+### Random Forest
+Very high ccuracy, I choose this and stop model search experimentation.  
+"rf" implementation took hours on my PC and often crashed.  
+"Rborist", and tips from stack exchange, provide good performance.
+```{r model_rf}
+if (!exists(deparse(substitute(fit_rf)))) {
+  fit_fname <- "fit_rf.rds"
+  if(file.exists(fit_fname)){
+    print(paste("reading model from file",fit_fname))
+    fit_rf <- readRDS(fit_fname)
+  } else {
+    fit_rf <- randomForest(df_train[, -c(respCol)], df_train$classe, method = "Rborist ",ntree=500,importance=TRUE, do.trace = TRUE)
+    print("saving model to file")
+    saveRDS(fit_rf, fit_fname)
+  }
+}
+pred_rf <- predict(fit_rf,df_test[ ,-c(respCol)])
+conf_rf <- confusionMatrix(pred_rf,df_test$classe)
+print(paste("Random Forest, train-test accuracy",round(conf_rf$overall[1],4)))
+```
