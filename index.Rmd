@@ -7,7 +7,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
-
 setwd("V:/data/learn/02_JHU_DSci/08_practical-machine-learning/04_week-4-regularized-regression-and-combining-predictors/project/work")
 library(caret)
 library(randomForest)
